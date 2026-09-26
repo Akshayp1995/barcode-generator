@@ -1,10 +1,37 @@
 import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
+import { PreloadAllModules, RouterModule, Routes } from '@angular/router';
 
-const routes: Routes = [];
+import { DashboardComponent } from './pages/dashboard/dashboard.component';
+
+export const routes: Routes = [
+  {
+    path: '',
+    children: [
+      {
+        path: '',
+        redirectTo: 'create-label',
+        pathMatch: 'full'
+      },
+      {
+        path: 'dashboard',
+        component: DashboardComponent
+      },
+      {
+        path: 'create-label',
+        loadChildren: () =>
+          import('./pages/barcode-label-generator/barcode-label-generator.module')
+            .then(m => m.BarcodeLabelGeneratorModule)
+      }
+    ]
+  }
+];
 
 @NgModule({
-  imports: [RouterModule.forRoot(routes)],
+  imports: [
+    RouterModule.forRoot(routes, {
+      preloadingStrategy: PreloadAllModules
+    })
+  ],
   exports: [RouterModule]
 })
-export class AppRoutingModule { }
+export class AppRoutingModule {}
