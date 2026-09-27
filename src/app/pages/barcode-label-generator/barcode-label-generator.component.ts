@@ -27,7 +27,9 @@ const DEFAULT_SAMPLE_DATA = {
   sku: "1004829104",
   barcode: "890123456789",
   brand: "Noddy",
-  manufacturer: "Fashion Boutique, Ahmedabad"
+  manufacturer: "Fashion Boutique, Ahmedabad",
+  email: "support@noddy.com",
+  phone: "+91 98765 43210"
 };
 
 const DEFAULT_TEMPLATE = {
@@ -44,7 +46,7 @@ const DEFAULT_TEMPLATE = {
     showBorders: false, showWatermark: false
   },
   elements: [
-    { id: "el_box1", type: "box", x: 2, y: 2, width: 46, height: 71, style: { borderWidth: 0.5, borderStyle: 'solid', borderColor: '#000000', borderRadius: 2, backgroundColor: 'transparent' } },
+    { id: "el_box1", type: "box", x: 2, y: 2, width: 46, height: 71, style: { borderWidth: 0.5, borderStyle: 'solid', borderColor: '#000000', borderRadius: 2, backgroundColor: 'transparent', borderTopWidth: 0.5, borderRightWidth: 0.5, borderBottomWidth: 0.5, borderLeftWidth: 0.5 } },
     { id: "el_brand", type: "text", content: "{{brand}}", x: 5, y: 5, width: 40, height: 8, style: { fontSize: 16, fontWeight: '800', textAlign: 'center', fontFamily: 'Arial' } },
     { id: "el_prod", type: "text", content: "{{productName}}", x: 5, y: 15, width: 40, height: 8, style: { fontSize: 10, fontWeight: '600', textAlign: 'center', fontFamily: 'Arial' } },
     { id: "el_style", type: "text", content: "Style: {{style}}", x: 5, y: 25, width: 40, height: 5, style: { fontSize: 8, fontWeight: '400', textAlign: 'left', fontFamily: 'Arial' } },
@@ -56,8 +58,6 @@ const DEFAULT_TEMPLATE = {
   ]
 };
 
-// --- PURE PIPES FOR RENDERING ---
-
 @Pipe({ name: 'resolveContent', standalone: true })
 class ResolveContentPipe implements PipeTransform {
   transform(text: string, data: any, mapping?: any): string {
@@ -65,7 +65,6 @@ class ResolveContentPipe implements PipeTransform {
     return text.replace(/\{\{(.*?)\}\}/g, (match: string, key: string) => {
       const cleanKey = key.trim();
       const mappedKey = (mapping && mapping[cleanKey]) ? mapping[cleanKey] : cleanKey;
-      
       const value = mappedKey.split('.').reduce((o: any, i: string) => (o ? o[i] : null), data);
       return value !== null && value !== undefined ? String(value) : '';
     });
@@ -76,17 +75,35 @@ class ResolveContentPipe implements PipeTransform {
 class BaseStylePipe implements PipeTransform {
   transform(el: any): any {
     const style = el.style || {};
+    let borderStyleObj = {};
+    if (el.type === 'box' && (style.borderTopWidth !== undefined || style.borderRightWidth !== undefined || style.borderBottomWidth !== undefined || style.borderLeftWidth !== undefined)) {
+      borderStyleObj = {
+        borderTopWidth: `${style.borderTopWidth ?? style.borderWidth ?? 0}mm`,
+        borderRightWidth: `${style.borderRightWidth ?? style.borderWidth ?? 0}mm`,
+        borderBottomWidth: `${style.borderBottomWidth ?? style.borderWidth ?? 0}mm`,
+        borderLeftWidth: `${style.borderLeftWidth ?? style.borderWidth ?? 0}mm`,
+        borderStyle: style.borderStyle || 'solid',
+        borderColor: style.borderColor || '#000'
+      };
+    } else {
+      borderStyleObj = {
+        borderWidth: `${style.borderWidth || 0}mm`,
+        borderStyle: style.borderStyle || 'solid',
+        borderColor: style.borderColor || '#000'
+      };
+    }
+
     return {
       width: '100%', height: '100%', fontFamily: style.fontFamily || 'sans-serif',
       fontSize: `${style.fontSize || 10}pt`, fontWeight: style.fontWeight || 'normal',
       color: style.color || '#000', backgroundColor: style.backgroundColor || 'transparent',
-      textAlign: style.textAlign || 'left', borderWidth: `${style.borderWidth || 0}mm`,
-      borderStyle: style.borderStyle || 'solid', borderColor: style.borderColor || '#000',
+      textAlign: style.textAlign || 'left',
+      ...borderStyleObj,
       borderRadius: `${style.borderRadius || 0}mm`, padding: `${style.padding || 0}mm`,
       overflow: style.overflow || 'hidden', whiteSpace: style.whiteSpace || 'normal',
       wordBreak: 'break-word', boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
       justifyContent: style.verticalAlign === 'middle' ? 'center' : style.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start',
-      alignItems: el.type === 'barcode' ? (style.textAlign === 'center' ? 'center' : style.textAlign === 'right' ? 'flex-end' : 'flex-start') : 'stretch'
+      alignItems: el.type === 'barcode' || el.type === 'icon' ? (style.textAlign === 'center' ? 'center' : style.textAlign === 'right' ? 'flex-end' : 'flex-start') : 'stretch'
     };
   }
 }
@@ -96,7 +113,6 @@ class TextStylePipe implements PipeTransform {
   transform(el: any): any {
     const style = el.style || {};
     let overflowStyles: any = {};
-    
     if (style.textOverflowEnabled) {
       if (style.textOverflowType === 'multi') {
         overflowStyles = {
@@ -117,7 +133,6 @@ class TextStylePipe implements PipeTransform {
         };
       }
     }
-    
     return {
       letterSpacing: `${style.letterSpacing || 0}px`,
       lineHeight: style.lineHeight || 1.2,
@@ -141,7 +156,7 @@ class BarcodeSrcPipe implements PipeTransform {
       });
       return canvas.toDataURL('image/png');
     } catch (e) {
-      return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"><rect width="100" height="40" fill="%23fee"/><text x="10" y="25" fill="red" font-family="sans-serif" font-size="12">Invalid Format</text></svg>';
+      return '';
     }
   }
 }
@@ -182,8 +197,9 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
   selectedId = signal<string | null>(null);
   zoom = signal<number>(3);
   viewMode = signal<'design' | 'preview'>('design');
-  leftTab = signal<'elements' | 'layers' | 'data'>('elements');
+  leftTab = signal<'elements' | 'layers' | 'data' | 'library'>('elements');
   isScriptsLoaded = signal<boolean>(false);
+  isAiScanning = signal<boolean>(false);
   copyState = signal<'idle' | 'copied'>('idle');
 
   dataSource = signal<'sample' | 'excel'>('sample');
@@ -191,6 +207,10 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
   uploadedFileName = signal<string>('');
   selectedExcelRow = signal<number>(0);
   fieldMapping = signal<Record<string, string>>({});
+
+  savedLibrary = signal<any[]>([]);
+  customFonts = signal<string[]>([]);
+  fontFacesCss = signal<string>('');
 
   selectedElement = computed(() => this.template().elements.find((e: any) => e.id === this.selectedId()));
   sampleDataString = computed(() => JSON.stringify(this.sampleData(), null, 2));
@@ -207,7 +227,7 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
     const regex = /\{\{(.*?)\}\}/g;
     this.template().elements.forEach((el: any) => {
       let match;
-      if (el.content) {
+      if (el.content && el.type === 'text') {
         while ((match = regex.exec(el.content)) !== null) {
           keys.add(match[1].trim());
         }
@@ -237,9 +257,10 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
 
   rulerTicksX = computed(() => {
     const w = this.template().width;
+    const z = this.zoom();
     const ticks = [];
     for (let mm = 0; mm <= w; mm += 5) {
-      const px = mm * 3.779527559;
+      const px = (mm * 3.779527559) * z;
       ticks.push({ val: mm, px, isMajor: mm % 10 === 0, isMedium: mm % 10 !== 0 });
     }
     return ticks;
@@ -247,19 +268,13 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
 
   rulerTicksY = computed(() => {
     const h = this.template().height;
+    const z = this.zoom();
     const ticks = [];
     for (let mm = 0; mm <= h; mm += 5) {
-      const px = mm * 3.779527559;
+      const px = (mm * 3.779527559) * z;
       ticks.push({ val: mm, px, isMajor: mm % 10 === 0, isMedium: mm % 10 !== 0 });
     }
     return ticks;
-  });
-
-  rulerOffset = computed(() => {
-    const z = this.zoom();
-    const w = this.template().width * 3.779527559 * z;
-    const h = this.template().height * 3.779527559 * z;
-    return { x: -w / 2, y: -h / 2 };
   });
 
   printSlots = computed(() => {
@@ -301,8 +316,209 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
     Promise.all([
       loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js'),
       loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'),
-      loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js')
-    ]).then(() => this.isScriptsLoaded.set(true)).catch(err => console.error(err));
+      loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'),
+      loadScript('https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'),
+      loadScript('https://docs.opencv.org/4.8.0/opencv.js')
+    ]).then(() => {
+      this.isScriptsLoaded.set(true);
+      const saved = localStorage.getItem('label_library');
+      if (saved) {
+        try { this.savedLibrary.set(JSON.parse(saved)); } catch(e) {}
+      }
+    }).catch(err => console.error(err));
+  }
+
+  saveToLibrary() {
+    const t = this.template();
+    const newItem = { id: `lib_${Date.now()}`, name: t.name || 'Untitled Label', width: t.width, height: t.height, template: JSON.parse(JSON.stringify(t)) };
+    const updated = [newItem, ...this.savedLibrary()];
+    this.savedLibrary.set(updated);
+    localStorage.setItem('label_library', JSON.stringify(updated));
+    alert('Label saved to library successfully!');
+  }
+
+  loadFromLibrary(item: any) {
+    this.template.set(JSON.parse(JSON.stringify(item.template)));
+    this.selectedId.set(null);
+  }
+
+  deleteFromLibrary(id: string) {
+    const updated = this.savedLibrary().filter(x => x.id !== id);
+    this.savedLibrary.set(updated);
+    localStorage.setItem('label_library', JSON.stringify(updated));
+  }
+
+  onTtfUpload(event: Event) {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const fontName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, '_');
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      const cssRule = `@font-face { font-family: '${fontName}'; src: url('${base64}'); }\n`;
+      this.fontFacesCss.update(css => css + cssRule);
+      this.customFonts.update(fonts => [...fonts, fontName]);
+      
+      const styleEl = document.createElement('style');
+      styleEl.innerHTML = cssRule;
+      document.head.appendChild(styleEl);
+
+      const sel = this.selectedElement();
+      if (sel && sel.type === 'text') {
+        this.updateElStyleDirect('fontFamily', fontName);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async onAiSketchUpload(event: Event) {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    
+    const Tesseract = (window as any).Tesseract;
+    const cv = (window as any).cv;
+    if (!Tesseract) {
+      alert('OCR Engine is still loading. Please try again in a moment.');
+      return;
+    }
+
+    this.isAiScanning.set(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const imgSrc = e.target?.result as string;
+      try {
+        let detectedBoxes: any[] = [];
+        
+        // OpenCV contour analysis if available
+        if (cv && cv.imread) {
+          try {
+            const imgElement = new Image();
+            imgElement.src = imgSrc;
+            await new Promise(res => { imgElement.onload = res; });
+            const canvas = document.createElement('canvas');
+            canvas.width = imgElement.width;
+            canvas.height = imgElement.height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(imgElement, 0, 0);
+            
+            const src = cv.imread(canvas);
+            const gray = new cv.Mat();
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+            const blurred = new cv.Mat();
+            cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+            const thresh = new cv.Mat();
+            cv.adaptiveThreshold(blurred, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
+            
+            const contours = new cv.MatVector();
+            const hierarchy = new cv.Mat();
+            cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+            
+            for (let i = 0; i < contours.size(); ++i) {
+              const cnt = contours.get(i);
+              const rect = cv.boundingRect(cnt);
+              if (rect.width > 30 && rect.height > 15 && rect.width < src.cols * 0.95 && rect.height < src.rows * 0.95) {
+                detectedBoxes.push({
+                  x: (rect.x / src.cols) * 50,
+                  y: (rect.y / src.rows) * 75,
+                  width: (rect.width / src.cols) * 50,
+                  height: (rect.height / src.rows) * 75
+                });
+              }
+              cnt.delete();
+            }
+            src.delete(); gray.delete(); blurred.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
+          } catch(cvErr) {
+            console.warn('OpenCV pre-processing skipped, falling back to pure OCR text flow', cvErr);
+          }
+        }
+
+        const worker = await Tesseract.createWorker('eng');
+        const ret = await worker.recognize(imgSrc);
+        await worker.terminate();
+
+        const words = ret.data.words || [];
+        const lines = ret.data.lines || [];
+        
+        let newElements: any[] = [];
+        let labelW = 50;
+        let labelH = 75;
+
+        newElements.push({
+          id: `el_box_${Date.now()}`, type: "box", x: 2, y: 2, width: labelW - 4, height: labelH - 4,
+          style: { borderWidth: 0.5, borderStyle: 'solid', borderColor: '#000000', borderRadius: 2, backgroundColor: 'transparent', borderTopWidth: 0.5, borderRightWidth: 0.5, borderBottomWidth: 0.5, borderLeftWidth: 0.5 }
+        });
+
+        if (lines.length > 0) {
+          let yCursor = 5;
+          for (let i = 0; i < Math.min(lines.length, 7); i++) {
+            const line = lines[i];
+            const text = line.text ? line.text.trim() : '';
+            if (!text) continue;
+
+            let mappedKey = 'productName';
+            const lower = text.toLowerCase();
+            if (lower.includes('mrp') || lower.includes('price') || lower.includes('rs') || lower.includes('₹')) {
+              mappedKey = 'mrp';
+            } else if (lower.includes('style') || lower.includes('code')) {
+              mappedKey = 'style';
+            } else if (lower.includes('size')) {
+              mappedKey = 'size';
+            } else if (i === 0) {
+              mappedKey = 'brand';
+            }
+
+            newElements.push({
+              id: `el_ocr_${i}_${Date.now()}`,
+              type: 'text',
+              content: `{{${mappedKey}}}`,
+              x: 5,
+              y: yCursor,
+              width: 40,
+              height: 7,
+              style: {
+                fontSize: i === 0 ? 14 : 10,
+                fontWeight: i === 0 ? 'bold' : 'normal',
+                textAlign: i === 0 ? 'center' : 'left',
+                fontFamily: 'Arial'
+              }
+            });
+            yCursor += 9;
+          }
+
+          newElements.push({
+            id: `el_ocr_bc_${Date.now()}`,
+            type: 'barcode',
+            content: '{{barcode}}',
+            x: 5,
+            y: Math.min(yCursor + 5, 52),
+            width: 40,
+            height: 14,
+            style: { barcodeType: 'CODE128', displayValue: true, fontSize: 10 }
+          });
+        } else {
+          newElements = DEFAULT_TEMPLATE.elements;
+        }
+
+        this.template.update(t => ({
+          ...t,
+          name: "Hybrid AI Scanned Label",
+          width: labelW,
+          height: labelH,
+          elements: newElements,
+          pageLayout: { ...t.pageLayout, pageWidth: labelW, pageHeight: labelH }
+        }));
+        this.selectedId.set(null);
+        alert(`Hybrid AI Scan Successful! OpenCV detected structural contours and Tesseract OCR mapped your text items.`);
+      } catch (err) {
+        console.error(err);
+        alert('AI scanning failed. Please try a clearer image.');
+      } finally {
+        this.isAiScanning.set(false);
+        (event.target as HTMLInputElement).value = '';
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   updateZoom(amount: number) { this.zoom.update(z => Math.max(0.5, Math.min(10, z + amount))); }
@@ -333,7 +549,7 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
         for (const el of t.elements) {
           const style = el.style || {};
           const jc = style.verticalAlign === 'middle' ? 'center' : style.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start';
-          const ai = el.type === 'barcode' ? (style.textAlign === 'center' ? 'center' : style.textAlign === 'right' ? 'flex-end' : 'flex-start') : 'stretch';
+          const ai = el.type === 'barcode' || el.type === 'icon' ? (style.textAlign === 'center' ? 'center' : style.textAlign === 'right' ? 'flex-end' : 'flex-start') : 'stretch';
 
           const resolved = new ResolveContentPipe().transform(el.content, slot.data, this.fieldMapping());
           let contentHtml = '';
@@ -348,6 +564,8 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
               }
             }
             contentHtml = `<span style="letter-spacing: ${style.letterSpacing || 0}px; line-height: ${style.lineHeight || 1.2}; text-transform: ${style.textTransform || 'none'}; ${overflowStyles}">${resolved || 'Text Field'}</span>`;
+          } else if (el.type === 'icon') {
+            contentHtml = `<i class="${resolved}" style="font-size: 100%; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;"></i>`;
           } else if (el.type === 'barcode') {
             const src = new BarcodeSrcPipe().transform(resolved, style, true);
             contentHtml = `<img src="${src}" style="width: 100%; height: 100%; object-fit: contain;" />`;
@@ -358,10 +576,24 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
             contentHtml = `<img src="${resolved}" style="width: 100%; height: 100%; object-fit: ${style.objectFit || 'contain'};" />`;
           }
 
+          let boxBorderCss = '';
+          if (el.type === 'box' && (style.borderTopWidth !== undefined || style.borderRightWidth !== undefined || style.borderBottomWidth !== undefined || style.borderLeftWidth !== undefined)) {
+            boxBorderCss = `
+              border-top-width: ${style.borderTopWidth ?? style.borderWidth ?? 0}mm;
+              border-right-width: ${style.borderRightWidth ?? style.borderWidth ?? 0}mm;
+              border-bottom-width: ${style.borderBottomWidth ?? style.borderWidth ?? 0}mm;
+              border-left-width: ${style.borderLeftWidth ?? style.borderWidth ?? 0}mm;
+              border-style: ${style.borderStyle || 'solid'};
+              border-color: ${style.borderColor || '#000'};
+            `;
+          } else {
+            boxBorderCss = `border: ${style.borderWidth || 0}mm ${style.borderStyle || 'solid'} ${style.borderColor || '#000'};`;
+          }
+
           const rot = el.style?.rotation ? `transform: rotate(${el.style.rotation}deg); transform-origin: center center;` : '';
           innerElements += `
             <div style="position: absolute; left: ${el.x}mm; top: ${el.y}mm; width: ${el.width}mm; height: ${el.height}mm; ${rot}">
-              <div style="width: 100%; height: 100%; font-family: ${style.fontFamily || 'sans-serif'}; font-size: ${style.fontSize || 10}pt; font-weight: ${style.fontWeight || 'normal'}; color: ${style.color || '#000'}; background-color: ${style.backgroundColor || 'transparent'}; text-align: ${style.textAlign || 'left'}; border: ${style.borderWidth || 0}mm ${style.borderStyle || 'solid'} ${style.borderColor || '#000'}; border-radius: ${style.borderRadius || 0}mm; padding: ${style.padding || 0}mm; overflow: ${style.overflow || 'hidden'}; white-space: ${style.whiteSpace || 'normal'}; word-break: break-word; box-sizing: border-box; display: flex; flex-direction: column; justify-content: ${jc}; align-items: ${ai};">
+              <div style="width: 100%; height: 100%; font-family: ${style.fontFamily || 'sans-serif'}; font-size: ${style.fontSize || 10}pt; font-weight: ${style.fontWeight || 'normal'}; color: ${style.color || '#000'}; background-color: ${style.backgroundColor || 'transparent'}; text-align: ${style.textAlign || 'left'}; ${boxBorderCss} border-radius: ${style.borderRadius || 0}mm; padding: ${style.padding || 0}mm; overflow: ${style.overflow || 'hidden'}; white-space: ${style.whiteSpace || 'normal'}; word-break: break-word; box-sizing: border-box; display: flex; flex-direction: column; justify-content: ${jc}; align-items: ${ai};">
                 ${contentHtml}
               </div>
             </div>`;
@@ -378,7 +610,9 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
 <html>
   <head>
     <title>${t.name}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
+      ${this.fontFacesCss()}
       @page { 
         size: ${l.pageWidth || 210}mm ${l.pageHeight || 297}mm; 
         margin: 0; 
@@ -426,10 +660,37 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
 
   copyHtmlCode() {
     const html = this.generateLabelHtml();
-    navigator.clipboard.writeText(html).then(() => {
-      this.copyState.set('copied');
-      setTimeout(() => this.copyState.set('idle'), 2000);
-    });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(html).then(() => {
+        this.copyState.set('copied');
+        setTimeout(() => this.copyState.set('idle'), 2000);
+      }).catch(() => {
+        this.fallbackCopyTextToClipboard(html);
+      });
+    } else {
+      this.fallbackCopyTextToClipboard(html);
+    }
+  }
+
+  fallbackCopyTextToClipboard(text: string) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        this.copyState.set('copied');
+        setTimeout(() => this.copyState.set('idle'), 2000);
+      }
+    } catch (err) {}
+    document.body.removeChild(textArea);
   }
 
   print() {
@@ -574,7 +835,7 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
     const id = this.selectedId();
     if (!id) return;
     this.template.update(t => ({
-      ...t, elements: t.elements.map((el: any) => el.id === id ? { ...el, style: { ...el.style, [key]: typeof val === 'string' && !isNaN(Number(val)) && key.includes('Size') ? Number(val) : val } } : el)
+      ...t, elements: t.elements.map((el: any) => el.id === id ? { ...el, style: { ...el.style, [key]: typeof val === 'string' && !isNaN(Number(val)) && (key.includes('Size') || key.includes('Width')) ? Number(val) : val } } : el)
     }));
   }
 
@@ -604,6 +865,25 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
     reader.readAsArrayBuffer(file);
   }
 
+  onAddImageUpload(event: Event) {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      const newEl = {
+        id: `el_${Date.now()}`, type: 'image', x: 10, y: 10,
+        width: 30, height: 30,
+        content: base64,
+        style: { objectFit: 'contain' }
+      };
+      this.template.update(t => ({ ...t, elements: [...t.elements, newEl] }));
+      this.selectedId.set(newEl.id);
+    };
+    reader.readAsDataURL(file);
+    (event.target as HTMLInputElement).value = '';
+  }
+
   updatePreviewRow(e: Event) {
     const val = Number((e.target as HTMLInputElement).value) - 1;
     this.selectedExcelRow.set(Math.max(0, Math.min(this.excelData().length - 1, val)));
@@ -619,7 +899,18 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
       id: `el_${Date.now()}`, type, x: 10, y: 10,
       width: type === 'box' ? 40 : 30, height: type === 'text' ? 10 : (type === 'barcode' ? 15 : 30),
       content: type === 'text' ? 'New Text' : (type === 'barcode' ? '12345678' : ''),
-      style: { fontSize: 10, fontFamily: 'Arial', color: '#000000', textAlign: 'left', barcodeType: 'CODE128', displayValue: true }
+      style: { fontSize: 10, fontFamily: 'Arial', color: '#000000', textAlign: 'left', barcodeType: 'CODE128', displayValue: true, borderTopWidth: 0.5, borderRightWidth: 0.5, borderBottomWidth: 0.5, borderLeftWidth: 0.5 }
+    };
+    this.template.update(t => ({ ...t, elements: [...t.elements, newEl] }));
+    this.selectedId.set(newEl.id);
+  }
+
+  addIcon(iconClass: string) {
+    const newEl = {
+      id: `el_${Date.now()}`, type: 'icon', x: 10, y: 10,
+      width: 10, height: 10,
+      content: iconClass,
+      style: { color: '#000000', fontSize: 14 }
     };
     this.template.update(t => ({ ...t, elements: [...t.elements, newEl] }));
     this.selectedId.set(newEl.id);

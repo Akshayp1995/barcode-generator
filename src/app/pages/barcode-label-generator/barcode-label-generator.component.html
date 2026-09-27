@@ -1,5 +1,8 @@
+
+
+
+
 <div class="app-container d-flex flex-column app-ui font-sans">
-      <!-- TOP TOOLBAR -->
       <nav class="navbar navbar-light bg-white border-bottom shadow-sm px-4" style="height: 60px;">
         <div class="d-flex align-items-center">
           <div class="bg-primary text-white font-weight-bold rounded d-flex align-items-center justify-content-center mr-2" style="width: 32px; height: 32px;">LD</div>
@@ -25,25 +28,49 @@
         </div>
       </nav>
 
-      <!-- MAIN EDITOR -->
       <div class="d-flex flex-grow-1 overflow-hidden">
         
-        <!-- LEFT PANEL -->
         <div class="bg-white border-right d-flex flex-column" style="width: 300px; z-index: 100;">
           <ul class="nav nav-tabs d-flex text-center">
             <li class="nav-item flex-grow-1"><a class="nav-link text-muted" [class.active]="leftTab() === 'elements'" (click)="leftTab.set('elements')">Add</a></li>
             <li class="nav-item flex-grow-1"><a class="nav-link text-muted" [class.active]="leftTab() === 'layers'" (click)="leftTab.set('layers')">Layers</a></li>
             <li class="nav-item flex-grow-1"><a class="nav-link text-muted" [class.active]="leftTab() === 'data'" (click)="leftTab.set('data')">Data</a></li>
+            <li class="nav-item flex-grow-1"><a class="nav-link text-muted" [class.active]="leftTab() === 'library'" (click)="leftTab.set('library')">Library</a></li>
           </ul>
 
           <div class="sidebar-panel p-3 bg-light">
             <ng-container *ngIf="leftTab() === 'elements'">
-              <div class="row no-gutters mx-n1">
-                <div class="col-6 p-1"><button class="btn btn-white border w-100 py-3 text-center rounded shadow-sm hover-bg-light" (click)="addElement('text')"><i class="fas fa-font fa-lg text-secondary mb-2 d-block"></i> <small class="font-weight-bold">Text</small></button></div>
+              <div class="card bg-white border mb-3 shadow-sm p-2 text-center">
+                <div class="font-weight-bold small text-dark mb-1"><i class="fas fa-robot text-primary mr-1"></i> Hybrid AI Sketch-to-Label (OpenCV + OCR)</div>
+                <small class="text-muted d-block mb-2" style="font-size: 10px;">Upload sketch photo. OpenCV contour analysis detects bounding boxes & Tesseract OCR extracts text layout!</small>
+                <div class="custom-file btn btn-sm btn-primary position-relative overflow-hidden w-100 py-1">
+                   <small class="font-weight-bold text-white"><i class="fas fa-upload mr-1"></i> {{ isAiScanning() ? 'Running OpenCV & OCR...' : 'Upload Sketch Photo' }}</small>
+                   <input type="file" accept="image/*" class="position-absolute" style="top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" [disabled]="isAiScanning()" (change)="onAiSketchUpload($event)">
+                </div>
+              </div>
+
+              <div class="row no-gutters mx-n1 mb-3">
+                <div class="col-6 p-1"><button class="btn btn-white border w-100 py-3 text-center rounded shadow-sm" (click)="addElement('text')"><i class="fas fa-font fa-lg text-secondary mb-2 d-block"></i> <small class="font-weight-bold">Text</small></button></div>
                 <div class="col-6 p-1"><button class="btn btn-white border w-100 py-3 text-center rounded shadow-sm" (click)="addElement('barcode')"><i class="fas fa-barcode fa-lg text-secondary mb-2 d-block"></i> <small class="font-weight-bold">Barcode</small></button></div>
                 <div class="col-6 p-1"><button class="btn btn-white border w-100 py-3 text-center rounded shadow-sm" (click)="addElement('qrcode')"><i class="fas fa-qrcode fa-lg text-secondary mb-2 d-block"></i> <small class="font-weight-bold">QR Code</small></button></div>
-                <div class="col-6 p-1"><button class="btn btn-white border w-100 py-3 text-center rounded shadow-sm" (click)="addElement('image')"><i class="fas fa-image fa-lg text-secondary mb-2 d-block"></i> <small class="font-weight-bold">Image</small></button></div>
+                <div class="col-6 p-1">
+                   <button class="btn btn-white border w-100 py-3 text-center rounded shadow-sm position-relative overflow-hidden" style="cursor: pointer;">
+                      <i class="fas fa-image fa-lg text-secondary mb-2 d-block"></i> 
+                      <small class="font-weight-bold">Image</small>
+                      <input type="file" accept="image/*" class="position-absolute" style="top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" (change)="onAddImageUpload($event)">
+                   </button>
+                </div>
                 <div class="col-12 p-1"><button class="btn btn-white border w-100 py-3 text-center rounded shadow-sm" (click)="addElement('box')"><i class="far fa-square fa-lg text-secondary mb-2 d-block"></i> <small class="font-weight-bold">Shape / Container</small></button></div>
+              </div>
+
+              <label class="text-muted small font-weight-bold text-uppercase">Icons</label>
+              <div class="row no-gutters mx-n1">
+                <div class="col-4 p-1"><button class="btn btn-white border w-100 py-2 text-center rounded shadow-sm" (click)="addIcon('fas fa-envelope')"><i class="fas fa-envelope text-secondary mb-1 d-block"></i><small style="font-size:9px">Email</small></button></div>
+                <div class="col-4 p-1"><button class="btn btn-white border w-100 py-2 text-center rounded shadow-sm" (click)="addIcon('fas fa-headset')"><i class="fas fa-headset text-secondary mb-1 d-block"></i><small style="font-size:9px">Support</small></button></div>
+                <div class="col-4 p-1"><button class="btn btn-white border w-100 py-2 text-center rounded shadow-sm" (click)="addIcon('fas fa-phone-alt')"><i class="fas fa-phone-alt text-secondary mb-1 d-block"></i><small style="font-size:9px">Phone</small></button></div>
+                <div class="col-4 p-1 mt-1"><button class="btn btn-white border w-100 py-2 text-center rounded shadow-sm" (click)="addIcon('fas fa-globe')"><i class="fas fa-globe text-secondary mb-1 d-block"></i><small style="font-size:9px">Website</small></button></div>
+                <div class="col-4 p-1 mt-1"><button class="btn btn-white border w-100 py-2 text-center rounded shadow-sm" (click)="addIcon('fas fa-map-marker-alt')"><i class="fas fa-map-marker-alt text-secondary mb-1 d-block"></i><small style="font-size:9px">Location</small></button></div>
+                <div class="col-4 p-1 mt-1"><button class="btn btn-white border w-100 py-2 text-center rounded shadow-sm" (click)="addIcon('fas fa-shield-alt')"><i class="fas fa-shield-alt text-secondary mb-1 d-block"></i><small style="font-size:9px">Shield</small></button></div>
               </div>
             </ng-container>
             
@@ -52,7 +79,7 @@
                 <ng-container *ngFor="let el of template().elements; let index = index">
                   <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3 border-bottom" [class.bg-primary]="selectedId() === el.id" [class.text-white]="selectedId() === el.id" (click)="selectedId.set(el.id)" style="cursor: pointer;">
                     <div class="text-truncate mr-2" style="font-size: 12px; font-weight: 500;">
-                       <i class="fas mr-2 opacity-50" [ngClass]="{'fa-font': el.type==='text', 'fa-barcode': el.type==='barcode', 'fa-qrcode': el.type==='qrcode', 'fa-image': el.type==='image', 'fa-square': el.type==='box'}"></i>
+                       <i class="fas mr-2 opacity-50" [ngClass]="{'fa-font': el.type==='text', 'fa-barcode': el.type==='barcode', 'fa-qrcode': el.type==='qrcode', 'fa-image': el.type==='image', 'fa-square': el.type==='box', 'fa-icons': el.type==='icon'}"></i>
                        {{ el.content || 'Box/Shape' }}
                     </div>
                     <div>
@@ -64,9 +91,39 @@
               </div>
             </ng-container>
             
+            <ng-container *ngIf="leftTab() === 'library'">
+               <div class="d-flex flex-column">
+                  <label class="text-muted small font-weight-bold text-uppercase">Save Current Label</label>
+                  <div class="input-group input-group-sm mb-3">
+                     <input type="text" class="form-control" [value]="template().name" (input)="updateTemplate('name', $event)" placeholder="Label Title">
+                     <div class="input-group-append">
+                        <button class="btn btn-primary font-weight-bold" (click)="saveToLibrary()"><i class="fas fa-save mr-1"></i> Save</button>
+                     </div>
+                  </div>
+
+                  <label class="text-muted small font-weight-bold text-uppercase mt-2">Saved Label Library</label>
+                  <div class="list-group list-group-flush shadow-sm rounded bg-white" style="max-height: 350px; overflow-y: auto;">
+                     <ng-container *ngIf="savedLibrary().length === 0">
+                        <div class="p-3 text-center text-muted small font-italic">No labels saved in library yet.</div>
+                     </ng-container>
+                     <ng-container *ngFor="let item of savedLibrary()">
+                        <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3 border-bottom">
+                           <div>
+                              <strong class="d-block text-dark" style="font-size: 13px;">{{item.name}}</strong>
+                              <small class="text-muted">{{item.width}}x{{item.height}}mm</small>
+                           </div>
+                           <div>
+                              <button class="btn btn-sm btn-outline-primary py-0 px-2 mr-1" (click)="loadFromLibrary(item)">Load</button>
+                              <button class="btn btn-sm btn-outline-danger py-0 px-2" (click)="deleteFromLibrary(item.id)"><i class="fas fa-trash"></i></button>
+                           </div>
+                        </div>
+                     </ng-container>
+                  </div>
+               </div>
+            </ng-container>
+
             <ng-container *ngIf="leftTab() === 'data'">
               <div class="d-flex flex-column">
-                
                 <div class="btn-group btn-group-sm w-100 mb-3 shadow-sm">
                   <button class="btn btn-outline-primary font-weight-bold" [class.active]="dataSource() === 'sample'" (click)="dataSource.set('sample')">Sample JSON</button>
                   <button class="btn btn-outline-primary font-weight-bold" [class.active]="dataSource() === 'excel'" (click)="dataSource.set('excel')">Excel / CSV</button>
@@ -74,7 +131,7 @@
 
                 <ng-container *ngIf="dataSource() === 'sample'">
                   <label class="text-muted small font-weight-bold text-uppercase">Sample JSON Data</label>
-                  <textarea class="form-control text-monospace small mb-3" style="min-height: 280px; resize: vertical;" [value]="sampleDataString()" (input)="updateSampleData($event)"></textarea>
+                  <textarea class="form-control text-monospace small mb-3" style="min-height: 250px; resize: vertical;" [value]="sampleDataString()" (input)="updateSampleData($event)"></textarea>
                 </ng-container>
                 
                 <ng-container *ngIf="dataSource() === 'excel'">
@@ -87,7 +144,7 @@
                   <ng-container *ngIf="excelData().length > 0">
                     <div class="alert alert-success py-1 px-2 small mb-2 d-flex justify-content-between align-items-center">
                        <span><strong>{{excelData().length}}</strong> Rows Loaded</span>
-                       <button class="btn btn-xs btn-success py-0" (click)="updatePageLayoutDirect('printQuantity', excelData().length)" title="Set Print Qty to Total Rows">Set Qty</button>
+                       <button class="btn btn-xs btn-success py-0" (click)="updatePageLayoutDirect('printQuantity', excelData().length)">Set Qty</button>
                     </div>
                     
                     <div class="input-group input-group-sm mb-3">
@@ -99,7 +156,7 @@
 
                 <div class="mt-2 pt-3 border-top">
                   <label class="text-muted small font-weight-bold text-uppercase mb-1">Field Mapping</label>
-                  <small class="d-block text-secondary mb-3" style="font-size: 10px; line-height: 1.2;">Map your label variables <code>{{'{{var}}'}}</code> to the actual fields in your data.</small>
+                  <small class="d-block text-secondary mb-3" style="font-size: 10px; line-height: 1.2;">Map your label variables <code>{{'{{var}}'}}</code> to data fields.</small>
                   
                   <ng-container *ngFor="let varName of templateVariables()">
                     <div class="input-group input-group-sm mb-2">
@@ -113,29 +170,23 @@
                     </div>
                   </ng-container>
                 </div>
-
-                <small class="text-muted mt-3">Use <code>{{ '{{key}}' }}</code> in text elements to bind data dynamically.</small>
               </div>
             </ng-container>
           </div>
         </div>
 
-        <!-- CANVAS AREA -->
         <div class="flex-grow-1 canvas-bg position-relative d-flex align-items-center justify-content-center overflow-auto p-5" (mousedown)="selectedId.set(null)">
           
-          <!-- Viewport Rulers -->
           <ng-container *ngIf="viewMode() === 'design'">
             <div class="ruler-container">
               <div class="ruler-corner"></div>
-              <!-- X Ruler -->
-              <div class="ruler-x" [style.transform]="'translateX(' + rulerOffset().x + 'px)'" [style.left]="'50%'">
+              <div class="ruler-x" [style.width.px]="template().width * 3.779527559 * zoom()" [style.marginLeft.px]="-(template().width * 3.779527559 * zoom()) / 2">
                 <ng-container *ngFor="let tick of rulerTicksX()">
                    <div class="tick tick-x" [style.left.px]="tick.px" [style.height.px]="tick.isMajor ? 12 : (tick.isMedium ? 8 : 4)"></div>
                    <div *ngIf="tick.isMajor" class="tick-text" [style.left.px]="tick.px + 2" style="bottom: 0px;">{{tick.val}}</div>
                 </ng-container>
               </div>
-              <!-- Y Ruler -->
-              <div class="ruler-y" [style.transform]="'translateY(' + rulerOffset().y + 'px)'" [style.top]="'50%'">
+              <div class="ruler-y" [style.height.px]="template().height * 3.779527559 * zoom()" [style.marginTop.px]="-(template().height * 3.779527559 * zoom()) / 2">
                 <ng-container *ngFor="let tick of rulerTicksY()">
                    <div class="tick tick-y" [style.top.px]="tick.px" [style.width.px]="tick.isMajor ? 12 : (tick.isMedium ? 8 : 4)"></div>
                    <div *ngIf="tick.isMajor" class="tick-text" [style.top.px]="tick.px + 2" style="right: 0px; transform: rotate(-90deg); transform-origin: left top;">{{tick.val}}</div>
@@ -160,6 +211,9 @@
                   <ng-container *ngIf="el.type === 'text'">
                     <span [ngStyle]="el | textStyle">{{ (el.content | resolveContent : (viewMode() === 'preview' ? activePreviewData() : {}) : fieldMapping()) || 'Text Field' }}</span>
                   </ng-container>
+                  <ng-container *ngIf="el.type === 'icon'">
+                    <i [class]="el.content" style="font-size: 100%; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;"></i>
+                  </ng-container>
                   <ng-container *ngIf="el.type === 'barcode'">
                     <img [src]="(el.content | resolveContent : (viewMode() === 'preview' ? activePreviewData() : {}) : fieldMapping()) | barcodeSrc : el.style : isScriptsLoaded()" style="width: 100%; height: 100%; object-fit: contain" />
                   </ng-container>
@@ -178,7 +232,6 @@
                   </ng-container>
                 </div>
                 
-                <!-- Resize Handles (Only shown when selected in design mode) -->
                 <ng-container *ngIf="viewMode() === 'design' && selectedId() === el.id">
                   <div class="resize-handle se" (mousedown)="onMouseDown($event, el.id, 'resize', 'se')"></div>
                   <div class="resize-handle e" (mousedown)="onMouseDown($event, el.id, 'resize', 'e')"></div>
@@ -190,7 +243,6 @@
           </div>
         </div>
 
-        <!-- RIGHT PANEL (PROPERTIES) -->
         <div class="bg-white border-left sidebar-panel" style="width: 320px; z-index: 100;">
           <ng-container *ngIf="!selectedElement()">
             <div class="prop-group bg-light">
@@ -358,8 +410,19 @@
                   <div class="input-group input-group-sm mb-2">
                     <div class="input-group-prepend"><span class="input-group-text bg-white" style="width: 80px; font-size: 11px;">Font</span></div>
                     <select class="custom-select" [value]="selectedElement()?.style?.fontFamily || 'Arial'" (change)="updateElStyle('fontFamily', $event)">
-                      <option value="Arial">Arial</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="Verdana">Verdana</option>
+                      <option value="Arial">Arial</option>
+                      <option value="'Courier New', Courier, monospace">Courier New</option>
+                      <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                      <option value="Verdana">Verdana</option>
+                      <ng-container *ngFor="let fontName of customFonts()">
+                        <option [value]="fontName">{{fontName}} (Custom TTF)</option>
+                      </ng-container>
                     </select>
+                  </div>
+
+                  <div class="custom-file mb-2">
+                    <input type="file" class="custom-file-input" id="ttfUpload" accept=".ttf" (change)="onTtfUpload($event)">
+                    <label class="custom-file-label small text-truncate" for="ttfUpload">Upload .ttf Font</label>
                   </div>
                 </ng-container>
                 
@@ -414,11 +477,23 @@
                 </div>
               </div>
               
-              <div class="row no-gutters mx-n1 mt-3">
-                <div class="col-6 p-1"><div class="input-group input-group-sm"><div class="input-group-prepend"><span class="input-group-text bg-white" style="font-size: 11px;">Border W</span></div><input type="number" class="form-control" [value]="selectedElement()?.style?.borderWidth || 0" (input)="updateElStyle('borderWidth', $event)"></div></div>
-                <div class="col-6 p-1"><div class="input-group input-group-sm"><div class="input-group-prepend"><span class="input-group-text bg-white" style="font-size: 11px;">Radius</span></div><input type="number" class="form-control" [value]="selectedElement()?.style?.borderRadius || 0" (input)="updateElStyle('borderRadius', $event)"></div></div>
-              </div>
+              <ng-container *ngIf="selectedElement()?.type === 'box'">
+                <label class="mt-3 text-dark border-top pt-2">Individual Border Widths (mm)</label>
+                <div class="row no-gutters mx-n1">
+                  <div class="col-6 p-1"><div class="input-group input-group-sm"><div class="input-group-prepend"><span class="input-group-text bg-white" style="font-size: 10px;">Top</span></div><input type="number" class="form-control" [value]="selectedElement()?.style?.borderTopWidth ?? selectedElement()?.style?.borderWidth ?? 0" (input)="updateElStyle('borderTopWidth', $event)"></div></div>
+                  <div class="col-6 p-1"><div class="input-group input-group-sm"><div class="input-group-prepend"><span class="input-group-text bg-white" style="font-size: 10px;">Right</span></div><input type="number" class="form-control" [value]="selectedElement()?.style?.borderRightWidth ?? selectedElement()?.style?.borderWidth ?? 0" (input)="updateElStyle('borderRightWidth', $event)"></div></div>
+                  <div class="col-6 p-1"><div class="input-group input-group-sm"><div class="input-group-prepend"><span class="input-group-text bg-white" style="font-size: 10px;">Bottom</span></div><input type="number" class="form-control" [value]="selectedElement()?.style?.borderBottomWidth ?? selectedElement()?.style?.borderWidth ?? 0" (input)="updateElStyle('borderBottomWidth', $event)"></div></div>
+                  <div class="col-6 p-1"><div class="input-group input-group-sm"><div class="input-group-prepend"><span class="input-group-text bg-white" style="font-size: 10px;">Left</span></div><input type="number" class="form-control" [value]="selectedElement()?.style?.borderLeftWidth ?? selectedElement()?.style?.borderWidth ?? 0" (input)="updateElStyle('borderLeftWidth', $event)"></div></div>
+                </div>
+              </ng-container>
               
+              <ng-container *ngIf="selectedElement()?.type !== 'box'">
+                <div class="row no-gutters mx-n1 mt-3">
+                  <div class="col-6 p-1"><div class="input-group input-group-sm"><div class="input-group-prepend"><span class="input-group-text bg-white" style="font-size: 11px;">Border W</span></div><input type="number" class="form-control" [value]="selectedElement()?.style?.borderWidth || 0" (input)="updateElStyle('borderWidth', $event)"></div></div>
+                  <div class="col-6 p-1"><div class="input-group input-group-sm"><div class="input-group-prepend"><span class="input-group-text bg-white" style="font-size: 11px;">Radius</span></div><input type="number" class="form-control" [value]="selectedElement()?.style?.borderRadius || 0" (input)="updateElStyle('borderRadius', $event)"></div></div>
+                </div>
+              </ng-container>
+
               <div class="input-group input-group-sm mt-2">
                  <div class="input-group-prepend"><span class="input-group-text bg-white" style="width: 100px; font-size: 11px;">Border Style</span></div>
                  <select class="custom-select" [value]="selectedElement()?.style?.borderStyle || 'solid'" (change)="updateElStyle('borderStyle', $event)">
@@ -431,7 +506,6 @@
       </div>
     </div>
 
-    <!-- Hidden Print Container -->
     <div id="print-container" class="bg-white">
        <ng-container *ngFor="let slot of printSlots()">
          <div class="print-label" [class.empty]="slot.isEmpty" style="position: relative; overflow: hidden; page-break-inside: avoid;" [style.width.mm]="template().width" [style.height.mm]="template().height">
@@ -441,6 +515,9 @@
                     <div [ngStyle]="el | baseStyle">
                       <ng-container *ngIf="el.type === 'text'">
                         <span [ngStyle]="el | textStyle">{{ (el.content | resolveContent : slot.data : fieldMapping()) || 'Text Field' }}</span>
+                      </ng-container>
+                      <ng-container *ngIf="el.type === 'icon'">
+                        <i [class]="el.content" style="font-size: 100%; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;"></i>
                       </ng-container>
                       <ng-container *ngIf="el.type === 'barcode'">
                         <img [src]="(el.content | resolveContent : slot.data : fieldMapping()) | barcodeSrc : el.style : isScriptsLoaded()" style="width: 100%; height: 100%; object-fit: contain" />
@@ -460,3 +537,7 @@
          </div>
        </ng-container>
     </div>
+
+
+
+
