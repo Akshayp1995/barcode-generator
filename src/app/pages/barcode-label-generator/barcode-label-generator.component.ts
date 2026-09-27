@@ -180,6 +180,7 @@ class QrCodeSrcPipe implements PipeTransform {
   }
 }
 
+
 @Component({
   selector: 'app-barcode-label-generator',
   standalone: true,
@@ -390,7 +391,6 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
       try {
         let detectedBoxes: any[] = [];
         
-        // OpenCV contour analysis if available
         if (cv && cv.imread) {
           try {
             const imgElement = new Image();
@@ -437,9 +437,7 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
         const ret = await worker.recognize(imgSrc);
         await worker.terminate();
 
-        const words = ret.data.words || [];
         const lines = ret.data.lines || [];
-        
         let newElements: any[] = [];
         let labelW = 50;
         let labelH = 75;
@@ -565,7 +563,7 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
             }
             contentHtml = `<span style="letter-spacing: ${style.letterSpacing || 0}px; line-height: ${style.lineHeight || 1.2}; text-transform: ${style.textTransform || 'none'}; ${overflowStyles}">${resolved || 'Text Field'}</span>`;
           } else if (el.type === 'icon') {
-            contentHtml = `<i class="${resolved}" style="font-size: 100%; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;"></i>`;
+            contentHtml = `<i class="${resolved}" style="font-size: ${style.fontSize || 14}pt; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;"></i>`;
           } else if (el.type === 'barcode') {
             const src = new BarcodeSrcPipe().transform(resolved, style, true);
             contentHtml = `<img src="${src}" style="width: 100%; height: 100%; object-fit: contain;" />`;

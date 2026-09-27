@@ -9,7 +9,7 @@ export const routes: Routes = [
     children: [
       {
         path: '',
-        redirectTo: 'create-label',
+        redirectTo: 'create-barcode',
         pathMatch: 'full'
       },
       {
@@ -17,10 +17,16 @@ export const routes: Routes = [
         component: DashboardComponent
       },
       {
-        path: 'create-label',
+        path: 'create-barcode',
         loadChildren: () =>
           import('./pages/barcode-label-generator/barcode-label-generator.module')
             .then(m => m.BarcodeLabelGeneratorModule)
+      },
+      {
+        path: 'create-cheque',
+        loadChildren: () =>
+          import('./pages/cheque-template-generator/cheque-template-generator.module')
+            .then(m => m.ChequeTemplateGeneratorModule)
       }
     ]
   }

@@ -1,0 +1,54 @@
+/* Custom utility classes to supplement Bootstrap 4 */
+    .z-index-10 { z-index: 10; }
+    .bg-secondary-light { background-color: #e2e8f0; }
+    .bg-primary-light { background-color: #f0f7ff; }
+    .border-primary-light { border-color: #cce5ff !important; }
+    .cursor-pointer { cursor: pointer; }
+    .tracking-wider { letter-spacing: 0.05em; }
+    .transition-colors { transition: background-color 0.2s, color 0.2s, border-color 0.2s; }
+    .transition-all { transition: all 0.3s ease; }
+    .select-none { user-select: none; }
+    .font-weight-medium { font-weight: 500; }
+    .hover-bg-light:hover { background-color: #f8f9fa !important; }
+    .border-dashed { border-style: dashed !important; }
+
+    /* Custom Scrollbar for Left Panel */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: #cbd5e1;
+      border-radius: 20px;
+    }
+
+    /* Print Preview Outline */
+    .field-hover-outline:hover {
+      outline: 1px solid #66b0ff;
+      background-color: rgba(0, 123, 255, 0.05);
+    }
+
+    .field-element {
+      white-space: pre-wrap;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+    .field-element:active {
+      cursor: grabbing;
+    }
+    .field-element.dragging {
+      outline: 1px dashed #007bff;
+      background-color: rgba(0, 123, 255, 0.1);
+      z-index: 100;
+    }
+
+    /* Print Specific Styles injected later during print */
+    .print-container {
+      /* Base styles defined in template via [ngStyle] */
+    }
+    .field-element {
+      white-space: pre-wrap;
+    }
