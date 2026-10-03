@@ -46,7 +46,7 @@ const DEFAULT_TEMPLATE = {
     showBorders: false, showWatermark: false
   },
   elements: [
-    { id: "el_box1", type: "box", x: 2, y: 2, width: 46, height: 71, style: { borderWidth: 0.5, borderStyle: 'solid', borderColor: '#000000', borderRadius: 2, backgroundColor: 'transparent', borderTopWidth: 0.5, borderRightWidth: 0.5, borderBottomWidth: 0.5, borderLeftWidth: 0.5 } },
+    { id: "el_box1", type: "box", x: 2, y: 2, width: 46, height: 71, style: { borderWidth: 0.5, borderStyle: 'solid', borderColor: '#000000', borderRadius: 2, borderTopLeftRadius: 2, borderTopRightRadius: 2, borderBottomRightRadius: 2, borderBottomLeftRadius: 2, backgroundColor: 'transparent', borderTopWidth: 0.5, borderRightWidth: 0.5, borderBottomWidth: 0.5, borderLeftWidth: 0.5 } },
     { id: "el_brand", type: "text", content: "{{brand}}", x: 5, y: 5, width: 40, height: 8, style: { fontSize: 16, fontWeight: '800', textAlign: 'center', fontFamily: 'Arial' } },
     { id: "el_prod", type: "text", content: "{{productName}}", x: 5, y: 15, width: 40, height: 8, style: { fontSize: 10, fontWeight: '600', textAlign: 'center', fontFamily: 'Arial' } },
     { id: "el_style", type: "text", content: "Style: {{style}}", x: 5, y: 25, width: 40, height: 5, style: { fontSize: 8, fontWeight: '400', textAlign: 'left', fontFamily: 'Arial' } },
@@ -76,22 +76,25 @@ class BaseStylePipe implements PipeTransform {
   transform(el: any): any {
     const style = el.style || {};
     let borderStyleObj = {};
-    if (el.type === 'box' && (style.borderTopWidth !== undefined || style.borderRightWidth !== undefined || style.borderBottomWidth !== undefined || style.borderLeftWidth !== undefined)) {
-      borderStyleObj = {
-        borderTopWidth: `${style.borderTopWidth ?? style.borderWidth ?? 0}mm`,
-        borderRightWidth: `${style.borderRightWidth ?? style.borderWidth ?? 0}mm`,
-        borderBottomWidth: `${style.borderBottomWidth ?? style.borderWidth ?? 0}mm`,
-        borderLeftWidth: `${style.borderLeftWidth ?? style.borderWidth ?? 0}mm`,
-        borderStyle: style.borderStyle || 'solid',
-        borderColor: style.borderColor || '#000'
-      };
-    } else {
-      borderStyleObj = {
-        borderWidth: `${style.borderWidth || 0}mm`,
-        borderStyle: style.borderStyle || 'solid',
-        borderColor: style.borderColor || '#000'
-      };
-    }
+    
+    borderStyleObj = {
+      borderTopWidth: `${style.borderTopWidth ?? style.borderWidth ?? 0}mm`,
+      borderRightWidth: `${style.borderRightWidth ?? style.borderWidth ?? 0}mm`,
+      borderBottomWidth: `${style.borderBottomWidth ?? style.borderWidth ?? 0}mm`,
+      borderLeftWidth: `${style.borderLeftWidth ?? style.borderWidth ?? 0}mm`,
+      borderStyle: style.borderStyle || 'solid',
+      borderColor: style.borderColor || '#000'
+    };
+
+    const rtl = style.borderTopLeftRadius ?? style.borderRadius ?? 0;
+    const rtr = style.borderTopRightRadius ?? style.borderRadius ?? 0;
+    const rbr = style.borderBottomRightRadius ?? style.borderRadius ?? 0;
+    const rbl = style.borderBottomLeftRadius ?? style.borderRadius ?? 0;
+
+    const pt = style.paddingTop ?? style.padding ?? 0;
+    const pr = style.paddingRight ?? style.padding ?? 0;
+    const pb = style.paddingBottom ?? style.padding ?? 0;
+    const pl = style.paddingLeft ?? style.padding ?? 0;
 
     return {
       width: '100%', height: '100%', fontFamily: style.fontFamily || 'sans-serif',
@@ -99,11 +102,19 @@ class BaseStylePipe implements PipeTransform {
       color: style.color || '#000', backgroundColor: style.backgroundColor || 'transparent',
       textAlign: style.textAlign || 'left',
       ...borderStyleObj,
-      borderRadius: `${style.borderRadius || 0}mm`, padding: `${style.padding || 0}mm`,
+      borderTopLeftRadius: `${rtl}mm`,
+      borderTopRightRadius: `${rtr}mm`,
+      borderBottomRightRadius: `${rbr}mm`,
+      borderBottomLeftRadius: `${rbl}mm`,
+      paddingTop: `${pt}mm`,
+      paddingRight: `${pr}mm`,
+      paddingBottom: `${pb}mm`,
+      paddingLeft: `${pl}mm`,
       overflow: style.overflow || 'hidden', whiteSpace: style.whiteSpace || 'normal',
       wordBreak: 'break-word', boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
       justifyContent: style.verticalAlign === 'middle' ? 'center' : style.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start',
-      alignItems: el.type === 'barcode' || el.type === 'icon' ? (style.textAlign === 'center' ? 'center' : style.textAlign === 'right' ? 'flex-end' : 'flex-start') : 'stretch'
+      alignItems: el.type === 'barcode' || el.type === 'icon' || el.type === 'qrcode' ? (style.textAlign === 'center' ? 'center' : style.textAlign === 'right' ? 'flex-end' : 'flex-start') : 'stretch',
+      pointerEvents: 'auto'
     };
   }
 }
@@ -201,7 +212,11 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
   leftTab = signal<'elements' | 'layers' | 'data' | 'library'>('elements');
   isScriptsLoaded = signal<boolean>(false);
   isAiScanning = signal<boolean>(false);
+  aiReferenceImage = signal<string | null>(null);
+  showAiReference = signal<boolean>(false);
   copyState = signal<'idle' | 'copied'>('idle');
+
+  accordionOpen = signal<{ padding: boolean; radius: boolean; borderWidth: boolean }>({ padding: false, radius: false, borderWidth: false });
 
   dataSource = signal<'sample' | 'excel'>('sample');
   excelData = signal<any[]>([]);
@@ -320,13 +335,88 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
       loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'),
       loadScript('https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'),
       loadScript('https://docs.opencv.org/4.8.0/opencv.js')
-    ]).then(() => {
+    ]).then(async () => {
+      await this.waitForOpenCV();
       this.isScriptsLoaded.set(true);
       const saved = localStorage.getItem('label_library');
       if (saved) {
         try { this.savedLibrary.set(JSON.parse(saved)); } catch(e) {}
       }
     }).catch(err => console.error(err));
+  }
+
+  private waitForOpenCV(): Promise<void> {
+    return new Promise((resolve) => {
+      const started = Date.now();
+      const check = () => {
+        const cv = (window as any).cv;
+        if (cv && typeof cv.imread === 'function') {
+          resolve();
+          return;
+        }
+        if (Date.now() - started > 30000) {
+          resolve(); 
+          return;
+        }
+        setTimeout(check, 100);
+      };
+      check();
+    });
+  }
+
+  toggleAccordion(section: 'padding' | 'radius' | 'borderWidth') {
+    this.accordionOpen.update(state => ({ ...state, [section]: !state[section] }));
+  }
+
+  getGlobalPadding(): number {
+    const el = this.selectedElement();
+    if (!el || !el.style) return 0;
+    return el.style.padding ?? el.style.paddingTop ?? 0;
+  }
+
+  setAllPadding(e: Event) {
+    const val = Number((e.target as HTMLInputElement).value) || 0;
+    const id = this.selectedId();
+    if (!id) return;
+    this.template.update(t => ({
+      ...t, elements: t.elements.map((el: any) => el.id === id ? {
+        ...el, style: { ...el.style, padding: val, paddingTop: val, paddingRight: val, paddingBottom: val, paddingLeft: val }
+      } : el)
+    }));
+  }
+
+  getGlobalRadius(): number {
+    const el = this.selectedElement();
+    if (!el || !el.style) return 0;
+    return el.style.borderRadius ?? el.style.borderTopLeftRadius ?? 0;
+  }
+
+  setAllRadius(e: Event) {
+    const val = Number((e.target as HTMLInputElement).value) || 0;
+    const id = this.selectedId();
+    if (!id) return;
+    this.template.update(t => ({
+      ...t, elements: t.elements.map((el: any) => el.id === id ? {
+        ...el, style: { ...el.style, borderRadius: val, borderTopLeftRadius: val, borderTopRightRadius: val, borderBottomRightRadius: val, borderBottomLeftRadius: val }
+      } : el)
+    }));
+  }
+
+  getGlobalBorderWidth(): number {
+    const el = this.selectedElement();
+    if (!el || !el.style) return 0;
+    return el.style.borderWidth ?? el.style.borderTopWidth ?? 0;
+  }
+
+  setAllBorderWidth(e: Event) {
+    const val = Number((e.target as HTMLInputElement).value) || 0;
+    const id = this.selectedId();
+    if (!id) return;
+    this.template.update(t => ({
+      ...t, elements: t.elements.map((el: any) => el.id === id ? {
+        ...el, style: { ...el.style, borderWidth: val, borderTopWidth: val, borderRightWidth: val, borderBottomWidth: val, borderLeftWidth: val }
+      } : el)
+    }));
   }
 
   saveToLibrary() {
@@ -373,150 +463,401 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
     reader.readAsDataURL(file);
   }
 
-  async onAiSketchUpload(event: Event) {
-    const file = (event.target as HTMLInputElement).files?.[0];
+  async onAiSketchUpload(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
-    
-    const Tesseract = (window as any).Tesseract;
-    const cv = (window as any).cv;
-    if (!Tesseract) {
-      alert('OCR Engine is still loading. Please try again in a moment.');
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a PNG, JPG, JPEG or WEBP image.');
+      input.value = '';
       return;
     }
 
     this.isAiScanning.set(true);
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const imgSrc = e.target?.result as string;
-      try {
-        let detectedBoxes: any[] = [];
-        
-        if (cv && cv.imread) {
-          try {
-            const imgElement = new Image();
-            imgElement.src = imgSrc;
-            await new Promise(res => { imgElement.onload = res; });
-            const canvas = document.createElement('canvas');
-            canvas.width = imgElement.width;
-            canvas.height = imgElement.height;
-            const ctx = canvas.getContext('2d');
-            ctx?.drawImage(imgElement, 0, 0);
-            
-            const src = cv.imread(canvas);
-            const gray = new cv.Mat();
-            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-            const blurred = new cv.Mat();
-            cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-            const thresh = new cv.Mat();
-            cv.adaptiveThreshold(blurred, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
-            
-            const contours = new cv.MatVector();
-            const hierarchy = new cv.Mat();
-            cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-            
-            for (let i = 0; i < contours.size(); ++i) {
-              const cnt = contours.get(i);
-              const rect = cv.boundingRect(cnt);
-              if (rect.width > 30 && rect.height > 15 && rect.width < src.cols * 0.95 && rect.height < src.rows * 0.95) {
-                detectedBoxes.push({
-                  x: (rect.x / src.cols) * 50,
-                  y: (rect.y / src.rows) * 75,
-                  width: (rect.width / src.cols) * 50,
-                  height: (rect.height / src.rows) * 75
-                });
-              }
-              cnt.delete();
-            }
-            src.delete(); gray.delete(); blurred.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
-          } catch(cvErr) {
-            console.warn('OpenCV pre-processing skipped, falling back to pure OCR text flow', cvErr);
-          }
-        }
 
-        const worker = await Tesseract.createWorker('eng');
-        const ret = await worker.recognize(imgSrc);
-        await worker.terminate();
+    try {
+      const referenceImage = await this.readFileAsDataUrl(file);
+      this.aiReferenceImage.set(referenceImage);
 
-        const lines = ret.data.lines || [];
-        let newElements: any[] = [];
-        let labelW = 50;
-        let labelH = 75;
+      const img = await this.loadAiImage(referenceImage);
+      const imageWidth = img.naturalWidth || img.width;
+      const imageHeight = img.naturalHeight || img.height;
 
-        newElements.push({
-          id: `el_box_${Date.now()}`, type: "box", x: 2, y: 2, width: labelW - 4, height: labelH - 4,
-          style: { borderWidth: 0.5, borderStyle: 'solid', borderColor: '#000000', borderRadius: 2, backgroundColor: 'transparent', borderTopWidth: 0.5, borderRightWidth: 0.5, borderBottomWidth: 0.5, borderLeftWidth: 0.5 }
-        });
-
-        if (lines.length > 0) {
-          let yCursor = 5;
-          for (let i = 0; i < Math.min(lines.length, 7); i++) {
-            const line = lines[i];
-            const text = line.text ? line.text.trim() : '';
-            if (!text) continue;
-
-            let mappedKey = 'productName';
-            const lower = text.toLowerCase();
-            if (lower.includes('mrp') || lower.includes('price') || lower.includes('rs') || lower.includes('₹')) {
-              mappedKey = 'mrp';
-            } else if (lower.includes('style') || lower.includes('code')) {
-              mappedKey = 'style';
-            } else if (lower.includes('size')) {
-              mappedKey = 'size';
-            } else if (i === 0) {
-              mappedKey = 'brand';
-            }
-
-            newElements.push({
-              id: `el_ocr_${i}_${Date.now()}`,
-              type: 'text',
-              content: `{{${mappedKey}}}`,
-              x: 5,
-              y: yCursor,
-              width: 40,
-              height: 7,
-              style: {
-                fontSize: i === 0 ? 14 : 10,
-                fontWeight: i === 0 ? 'bold' : 'normal',
-                textAlign: i === 0 ? 'center' : 'left',
-                fontFamily: 'Arial'
-              }
-            });
-            yCursor += 9;
-          }
-
-          newElements.push({
-            id: `el_ocr_bc_${Date.now()}`,
-            type: 'barcode',
-            content: '{{barcode}}',
-            x: 5,
-            y: Math.min(yCursor + 5, 52),
-            width: 40,
-            height: 14,
-            style: { barcodeType: 'CODE128', displayValue: true, fontSize: 10 }
-          });
-        } else {
-          newElements = DEFAULT_TEMPLATE.elements;
-        }
-
-        this.template.update(t => ({
-          ...t,
-          name: "Hybrid AI Scanned Label",
-          width: labelW,
-          height: labelH,
-          elements: newElements,
-          pageLayout: { ...t.pageLayout, pageWidth: labelW, pageHeight: labelH }
-        }));
-        this.selectedId.set(null);
-        alert(`Hybrid AI Scan Successful! OpenCV detected structural contours and Tesseract OCR mapped your text items.`);
-      } catch (err) {
-        console.error(err);
-        alert('AI scanning failed. Please try a clearer image.');
-      } finally {
-        this.isAiScanning.set(false);
-        (event.target as HTMLInputElement).value = '';
+      if (!imageWidth || !imageHeight) {
+        throw new Error('Invalid image dimensions.');
       }
+
+      const cv = (window as any).cv;
+      const sourceCanvas = document.createElement('canvas');
+      sourceCanvas.width = imageWidth;
+      sourceCanvas.height = imageHeight;
+      const sourceContext = sourceCanvas.getContext('2d', { willReadFrequently: true });
+      if (!sourceContext) throw new Error('Canvas context unavailable.');
+      sourceContext.drawImage(img, 0, 0, imageWidth, imageHeight);
+
+      let labelRect = { x: 0, y: 0, width: imageWidth, height: imageHeight };
+      let sourceMat: any = null;
+
+      if (cv && typeof cv.imread === 'function') {
+        try {
+          sourceMat = cv.imread(sourceCanvas);
+          labelRect = this.detectAiLabelBoundary(cv, sourceMat, imageWidth, imageHeight);
+        } catch (e) {
+          console.warn('OpenCV processing fallback:', e);
+        }
+      }
+
+      const Tesseract = (window as any).Tesseract;
+      if (!Tesseract) throw new Error('Tesseract OCR is not loaded.');
+
+      const worker = await Tesseract.createWorker('eng');
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6',
+        preserve_interword_spaces: '1'
+      });
+
+      const ocrResult = await worker.recognize(referenceImage);
+      await worker.terminate();
+
+      const ocrData = ocrResult?.data || { text: '', words: [], lines: [] };
+      const barcodeRegion = (cv && sourceMat) ? this.detectAiBarcode(cv, sourceMat, labelRect) : null;
+
+      const labelWidth = 50;
+      const aspectRatio = labelRect.width / Math.max(1, labelRect.height);
+      let labelHeight = labelWidth / Math.max(0.05, aspectRatio);
+      labelHeight = Math.max(30, Math.min(200, labelHeight));
+
+      const extractedElements: any[] = [];
+
+      extractedElements.push({
+        id: `ai-border-${Date.now()}`,
+        type: 'box',
+        x: 0.3, y: 0.3,
+        width: Math.max(1, labelWidth - 0.6),
+        height: Math.max(1, labelHeight - 0.6),
+        style: {
+          borderWidth: 0.35, borderStyle: 'solid', borderColor: '#000000', borderRadius: 0, backgroundColor: 'transparent',
+          borderTopWidth: 0.35, borderRightWidth: 0.35, borderBottomWidth: 0.35, borderLeftWidth: 0.35
+        }
+      });
+
+      const textLines = this.buildAiTextLines(ocrData);
+      let textIndex = 0;
+
+      for (const line of textLines) {
+        const text = String(line.text || '').replace(/\s+/g, ' ').trim();
+        if (!text) continue;
+
+        if (barcodeRegion && this.aiBoxInsideOrOverlaps(line.bbox, barcodeRegion, 0.35)) {
+          continue;
+        }
+
+        const position = this.aiImageBoxToLabel(line.bbox, labelRect, labelWidth, labelHeight);
+        const fontSize = this.estimateAiFontSize(line.bbox, labelRect, labelHeight);
+        const fontWeight = this.estimateAiFontWeight(text, line.confidence);
+        const textAlign = this.detectAiTextAlignment(position, labelWidth);
+        const content = this.cleanAiOcrText(text);
+
+        extractedElements.push({
+          id: `ai-text-${Date.now()}-${textIndex++}`,
+          type: 'text',
+          content,
+          x: position.x,
+          y: position.y,
+          width: position.width,
+          height: Math.max(position.height, 2),
+          style: {
+            fontSize,
+            fontWeight,
+            fontFamily: 'Arial',
+            textAlign,
+            verticalAlign: 'middle',
+            color: '#000000',
+            backgroundColor: 'transparent',
+            borderWidth: 0,
+            borderStyle: 'solid',
+            borderColor: 'transparent',
+            borderRadius: 0,
+            padding: 0,
+            margin: 0,
+            letterSpacing: 0,
+            lineHeight: 1,
+            textTransform: 'none',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }
+        });
+      }
+
+      if (barcodeRegion) {
+        const barcodePosition = this.aiImageBoxToLabel(barcodeRegion, labelRect, labelWidth, labelHeight);
+        extractedElements.push({
+          id: `ai-barcode-${Date.now()}`,
+          type: 'barcode',
+          content: '{{barcode}}',
+          x: barcodePosition.x,
+          y: barcodePosition.y,
+          width: barcodePosition.width,
+          height: barcodePosition.height,
+          style: {
+            barcodeType: 'CODE128',
+            displayValue: false,
+            textAlign: 'center',
+            verticalAlign: 'middle',
+            objectFit: 'contain'
+          }
+        });
+      }
+
+      const finalElements = this.removeAiDuplicateElements(extractedElements);
+
+      const aiTemplate = {
+        name: 'AI Scanned Label',
+        width: labelWidth,
+        height: labelHeight,
+        elements: finalElements
+      };
+
+      this.applyAiTemplate(aiTemplate);
+      this.showAiReference.set(false);
+      this.selectedId.set(null);
+      this.viewMode.set('design');
+
+      if (sourceMat) {
+        sourceMat.delete();
+      }
+
+      alert(`Label created successfully.\n\nDetected ${textLines.length} text regions${barcodeRegion ? ' + barcode region' : ''}.`);
+    } catch (error: any) {
+      console.error('[AI Sketch-to-Label]', error);
+      alert(error?.message || 'AI scanning failed. Please try a clearer image.');
+    } finally {
+      this.isAiScanning.set(false);
+      input.value = '';
+    }
+  }
+
+  private readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private loadAiImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Unable to load uploaded image.'));
+      img.src = src;
+    });
+  }
+
+  private detectAiLabelBoundary(cv: any, src: any, imageWidth: number, imageHeight: number) {
+    try {
+      const gray = new cv.Mat();
+      const edges = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      cv.Canny(gray, edges, 50, 150);
+      const contours = new cv.MatVector();
+      const hierarchy = new cv.Mat();
+      cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      let best: any = null;
+      let bestScore = 0;
+
+      for (let i = 0; i < contours.size(); i++) {
+        const contour = contours.get(i);
+        const rect = cv.boundingRect(contour);
+        const area = rect.width * rect.height;
+        const coverage = area / (imageWidth * imageHeight);
+
+        if (coverage > 0.45 && coverage <= 1.0 && area > bestScore) {
+          bestScore = area;
+          best = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        }
+        contour.delete();
+      }
+      contours.delete(); hierarchy.delete(); gray.delete(); edges.delete();
+      return best || { x: 0, y: 0, width: imageWidth, height: imageHeight };
+    } catch (e) {
+      return { x: 0, y: 0, width: imageWidth, height: imageHeight };
+    }
+  }
+
+  private detectAiBarcode(cv: any, src: any, labelRect: any) {
+    try {
+      const gray = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      const gradX = new cv.Mat(); const gradY = new cv.Mat();
+      cv.Sobel(gray, gradX, cv.CV_32F, 1, 0, 3);
+      cv.Sobel(gray, gradY, cv.CV_32F, 0, 1, 3);
+      const absX = new cv.Mat(); const absY = new cv.Mat();
+      cv.convertScaleAbs(gradX, absX); cv.convertScaleAbs(gradY, absY);
+      const gradient = new cv.Mat();
+      cv.subtract(absX, absY, gradient);
+      const blurred = new cv.Mat();
+      cv.blur(gradient, blurred, new cv.Size(9, 9));
+      const binary = new cv.Mat();
+      cv.threshold(blurred, binary, 80, 255, cv.THRESH_BINARY);
+      const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(25, 7));
+      const closed = new cv.Mat();
+      cv.morphologyEx(binary, closed, cv.MORPH_CLOSE, kernel);
+      cv.dilate(closed, closed, kernel);
+      const contours = new cv.MatVector();
+      const hierarchy = new cv.Mat();
+      cv.findContours(closed, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      let best: any = null; let bestScore = 0;
+      const imageArea = labelRect.width * labelRect.height;
+
+      for (let i = 0; i < contours.size(); i++) {
+        const contour = contours.get(i);
+        const rect = cv.boundingRect(contour);
+        const width = rect.width; const height = rect.height;
+        const aspect = width / Math.max(1, height);
+        const area = width * height; const areaRatio = area / imageArea;
+
+        if (aspect >= 2 && aspect <= 20 && areaRatio >= 0.01 && areaRatio <= 0.35) {
+          const score = area * aspect;
+          if (score > bestScore) {
+            bestScore = score;
+            best = { x: labelRect.x + rect.x, y: labelRect.y + rect.y, width: rect.width, height: rect.height };
+          }
+        }
+        contour.delete();
+      }
+      contours.delete(); hierarchy.delete(); kernel.delete(); gray.delete();
+      gradX.delete(); gradY.delete(); absX.delete(); absY.delete(); gradient.delete(); blurred.delete(); binary.delete(); closed.delete();
+      return best;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  private buildAiTextLines(ocr: any): any[] {
+    const words = Array.isArray(ocr?.words) ? ocr.words : [];
+    const lines = Array.isArray(ocr?.lines) ? ocr.lines : [];
+
+    if (lines.length > 0) {
+      return lines.map((line: any) => {
+        const lineWords = words.filter((word: any) => word?.bbox && this.aiBoxesOverlap(line.bbox, word.bbox));
+        const bbox = this.aiUnionBoxes([line.bbox, ...lineWords.map((w: any) => w.bbox)]);
+        const text = lineWords.length
+          ? lineWords.sort((a: any, b: any) => a.bbox.x0 - b.bbox.x0).map((w: any) => String(w.text || '').trim()).filter(Boolean).join(' ')
+          : String(line.text || '').trim();
+        const confidence = lineWords.length
+          ? lineWords.reduce((acc: number, w: any) => acc + Number(w.confidence || 0), 0) / lineWords.length
+          : Number(line.confidence || 0);
+        return { text, bbox, confidence };
+      }).filter((x: any) => x.text && x.bbox);
+    }
+    return [];
+  }
+
+  private aiBoxesOverlap(a: any, b: any): boolean {
+    if (!a || !b) return false;
+    return !(a.x1 < b.x0 || a.x0 > b.x1 || a.y1 < b.y0 || a.y0 > b.y1);
+  }
+
+  private aiBoxInsideOrOverlaps(a: any, b: any, threshold = 0.5): boolean {
+    if (!a || !b) return false;
+    const x1 = Math.max(a.x0, b.x); const y1 = Math.max(a.y0, b.y);
+    const x2 = Math.min(a.x1, b.x + b.width); const y2 = Math.min(a.y1, b.y + b.height);
+    if (x2 <= x1 || y2 <= y1) return false;
+    const intersection = (x2 - x1) * (y2 - y1);
+    const areaA = Math.max(1, (a.x1 - a.x0) * (a.y1 - a.y0));
+    return (intersection / areaA) >= threshold;
+  }
+
+  private aiUnionBoxes(boxes: any[]) {
+    const valid = boxes.filter(b => b && Number.isFinite(Number(b.x0)));
+    if (!valid.length) return { x0: 0, y0: 0, x1: 1, y1: 1 };
+    return {
+      x0: Math.min(...valid.map(b => Number(b.x0))),
+      y0: Math.min(...valid.map(b => Number(b.y0))),
+      x1: Math.max(...valid.map(b => Number(b.x1))),
+      y1: Math.max(...valid.map(b => Number(b.y1)))
     };
-    reader.readAsDataURL(file);
+  }
+
+  private aiImageBoxToLabel(box: any, labelRect: any, labelWidth: number, labelHeight: number) {
+    const relativeX = box.x0 - labelRect.x;
+    const relativeY = box.y0 - labelRect.y;
+    const relativeWidth = Math.max(1, box.x1 - box.x0);
+    const relativeHeight = Math.max(1, box.y1 - box.y0);
+
+    return {
+      x: (relativeX / labelRect.width) * labelWidth,
+      y: (relativeY / labelRect.height) * labelHeight,
+      width: (relativeWidth / labelRect.width) * labelWidth,
+      height: (relativeHeight / labelRect.height) * labelHeight
+    };
+  }
+
+  private estimateAiFontSize(bbox: any, labelRect: any, labelHeight: number): number {
+    const pixelHeight = Math.max(5, bbox.y1 - bbox.y0);
+    const physicalHeight = (pixelHeight / labelRect.height) * labelHeight;
+    const fontSizePt = physicalHeight * 2.83465 / 0.72;
+    return Number(Math.max(5, Math.min(32, fontSizePt)).toFixed(1));
+  }
+
+  private estimateAiFontWeight(text: string, confidence: number): string {
+    const clean = text.toLowerCase().replace(/[^a-z0-9₹]/g, '');
+    if (clean === 'zodic' || clean.includes('mrp') || clean.includes('sunil') || clean.includes('decore')) {
+      return '900';
+    }
+    if (text.length <= 8 || confidence >= 85) return '700';
+    return '600';
+  }
+
+  private detectAiTextAlignment(position: any, labelWidth: number): 'left' | 'center' | 'right' {
+    const center = position.x + position.width / 2;
+    const labelCenter = labelWidth / 2;
+    if (Math.abs(center - labelCenter) < labelWidth * 0.06) return 'center';
+    if (position.x > labelWidth * 0.60) return 'right';
+    return 'left';
+  }
+
+  private cleanAiOcrText(value: string): string {
+    return String(value || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  private removeAiDuplicateElements(elements: any[]): any[] {
+    const result: any[] = [];
+    for (const element of elements) {
+      if (element.type === 'box' || element.type === 'barcode') {
+        result.push(element);
+        continue;
+      }
+      const duplicate = result.some(existing => existing.type === 'text' && element.type === 'text' && existing.content === element.content && Math.abs(existing.x - element.x) < 1 && Math.abs(existing.y - element.y) < 1);
+      if (!duplicate) result.push(element);
+    }
+    return result;
+  }
+
+  applyAiTemplate(aiTemplate: any): void {
+    const width = Number(aiTemplate?.width || 50);
+    const height = Number(aiTemplate?.height || 75);
+    const elements = Array.isArray(aiTemplate?.elements) ? aiTemplate.elements : [];
+
+    this.template.set({
+      name: String(aiTemplate?.name || 'AI Scanned Label'),
+      width,
+      height,
+      unit: 'mm',
+      pageLayout: {
+        labelsPerRow: 1, labelsPerCol: 1, horizontalGap: 0, verticalGap: 0,
+        pageWidth: width, pageHeight: height, marginTop: 0, marginLeft: 0,
+        printQuantity: 1, startPosition: 1, showBorders: false, showWatermark: false
+      },
+      elements
+    });
+    this.selectedId.set(null);
   }
 
   updateZoom(amount: number) { this.zoom.update(z => Math.max(0.5, Math.min(10, z + amount))); }
@@ -547,7 +888,7 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
         for (const el of t.elements) {
           const style = el.style || {};
           const jc = style.verticalAlign === 'middle' ? 'center' : style.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start';
-          const ai = el.type === 'barcode' || el.type === 'icon' ? (style.textAlign === 'center' ? 'center' : style.textAlign === 'right' ? 'flex-end' : 'flex-start') : 'stretch';
+          const ai = el.type === 'barcode' || el.type === 'icon' || el.type === 'qrcode' ? (style.textAlign === 'center' ? 'center' : style.textAlign === 'right' ? 'flex-end' : 'flex-start') : 'stretch';
 
           const resolved = new ResolveContentPipe().transform(el.content, slot.data, this.fieldMapping());
           let contentHtml = '';
@@ -575,23 +916,29 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
           }
 
           let boxBorderCss = '';
-          if (el.type === 'box' && (style.borderTopWidth !== undefined || style.borderRightWidth !== undefined || style.borderBottomWidth !== undefined || style.borderLeftWidth !== undefined)) {
-            boxBorderCss = `
-              border-top-width: ${style.borderTopWidth ?? style.borderWidth ?? 0}mm;
-              border-right-width: ${style.borderRightWidth ?? style.borderWidth ?? 0}mm;
-              border-bottom-width: ${style.borderBottomWidth ?? style.borderWidth ?? 0}mm;
-              border-left-width: ${style.borderLeftWidth ?? style.borderWidth ?? 0}mm;
-              border-style: ${style.borderStyle || 'solid'};
-              border-color: ${style.borderColor || '#000'};
-            `;
-          } else {
-            boxBorderCss = `border: ${style.borderWidth || 0}mm ${style.borderStyle || 'solid'} ${style.borderColor || '#000'};`;
-          }
+          boxBorderCss = `
+            border-top-width: ${style.borderTopWidth ?? style.borderWidth ?? 0}mm;
+            border-right-width: ${style.borderRightWidth ?? style.borderWidth ?? 0}mm;
+            border-bottom-width: ${style.borderBottomWidth ?? style.borderWidth ?? 0}mm;
+            border-left-width: ${style.borderLeftWidth ?? style.borderWidth ?? 0}mm;
+            border-style: ${style.borderStyle || 'solid'};
+            border-color: ${style.borderColor || '#000'};
+          `;
+
+          const rtl = style.borderTopLeftRadius ?? style.borderRadius ?? 0;
+          const rtr = style.borderTopRightRadius ?? style.borderRadius ?? 0;
+          const rbr = style.borderBottomRightRadius ?? style.borderRadius ?? 0;
+          const rbl = style.borderBottomLeftRadius ?? style.borderRadius ?? 0;
+
+          const pt = style.paddingTop ?? style.padding ?? 0;
+          const pr = style.paddingRight ?? style.padding ?? 0;
+          const pb = style.paddingBottom ?? style.padding ?? 0;
+          const pl = style.paddingLeft ?? style.padding ?? 0;
 
           const rot = el.style?.rotation ? `transform: rotate(${el.style.rotation}deg); transform-origin: center center;` : '';
           innerElements += `
             <div style="position: absolute; left: ${el.x}mm; top: ${el.y}mm; width: ${el.width}mm; height: ${el.height}mm; ${rot}">
-              <div style="width: 100%; height: 100%; font-family: ${style.fontFamily || 'sans-serif'}; font-size: ${style.fontSize || 10}pt; font-weight: ${style.fontWeight || 'normal'}; color: ${style.color || '#000'}; background-color: ${style.backgroundColor || 'transparent'}; text-align: ${style.textAlign || 'left'}; ${boxBorderCss} border-radius: ${style.borderRadius || 0}mm; padding: ${style.padding || 0}mm; overflow: ${style.overflow || 'hidden'}; white-space: ${style.whiteSpace || 'normal'}; word-break: break-word; box-sizing: border-box; display: flex; flex-direction: column; justify-content: ${jc}; align-items: ${ai};">
+              <div style="width: 100%; height: 100%; font-family: ${style.fontFamily || 'sans-serif'}; font-size: ${style.fontSize || 10}pt; font-weight: ${style.fontWeight || 'normal'}; color: ${style.color || '#000'}; background-color: ${style.backgroundColor || 'transparent'}; text-align: ${style.textAlign || 'left'}; ${boxBorderCss} border-top-left-radius: ${rtl}mm; border-top-right-radius: ${rtr}mm; border-bottom-right-radius: ${rbr}mm; border-bottom-left-radius: ${rbl}mm; padding-top: ${pt}mm; padding-right: ${pr}mm; padding-bottom: ${pb}mm; padding-left: ${pl}mm; overflow: ${style.overflow || 'hidden'}; white-space: ${style.whiteSpace || 'normal'}; word-break: break-word; box-sizing: border-box; display: flex; flex-direction: column; justify-content: ${jc}; align-items: ${ai};">
                 ${contentHtml}
               </div>
             </div>`;
@@ -833,7 +1180,7 @@ export class BarcodeLabelGeneratorComponent implements OnInit {
     const id = this.selectedId();
     if (!id) return;
     this.template.update(t => ({
-      ...t, elements: t.elements.map((el: any) => el.id === id ? { ...el, style: { ...el.style, [key]: typeof val === 'string' && !isNaN(Number(val)) && (key.includes('Size') || key.includes('Width')) ? Number(val) : val } } : el)
+      ...t, elements: t.elements.map((el: any) => el.id === id ? { ...el, style: { ...el.style, [key]: typeof val === 'string' && !isNaN(Number(val)) && (key.includes('Size') || key.includes('Width') || key.includes('Radius') || key.includes('padding') || key.includes('Padding')) ? Number(val) : val } } : el)
     }));
   }
 
