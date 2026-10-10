@@ -23,6 +23,12 @@ export const routes: Routes = [
             .then(m => m.BarcodeLabelGeneratorModule)
       },
       {
+        path: 'create-barcode1',
+        loadChildren: () =>
+          import('./pages/hybrid-label-generator/hybrid-label-generator.module')
+            .then(m => m.HybridLabelGeneratorModule)
+      },
+      {
         path: 'create-cheque',
         loadChildren: () =>
           import('./pages/cheque-template-generator/cheque-template-generator.module')
