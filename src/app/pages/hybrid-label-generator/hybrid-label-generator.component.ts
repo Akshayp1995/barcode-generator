@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
+// --- UTILITIES & EXTERNAL SCRIPTS ---
 const loadScript = (src: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) {
@@ -217,8 +218,8 @@ export class HybridLabelGeneratorComponent implements OnInit {
   isScriptsLoaded = signal<boolean>(false);
   copyState = signal<'idle' | 'copied'>('idle');
 
-  aiPrompt = signal<string>('');
   isGeneratingAi = signal<boolean>(false);
+  aiPrompt = signal<string>('');
   sketchImageBase64 = signal<string>('');
   sketchFileName = signal<string>('');
 
@@ -365,7 +366,8 @@ export class HybridLabelGeneratorComponent implements OnInit {
     Promise.all([
       loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js'),
       loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'),
-      loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js')
+      loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'),
+      loadScript('https://unpkg.com/tesseract.js@v5.1.0/dist/tesseract.min.js')
     ]).then(() => {
       this.isScriptsLoaded.set(true);
       const saved = localStorage.getItem('label_library');
@@ -506,59 +508,86 @@ export class HybridLabelGeneratorComponent implements OnInit {
   }
 
   async generateAiLabel() {
-    const prompt = this.aiPrompt();
     const sketchImg = this.sketchImageBase64();
-    if (!prompt.trim() && !sketchImg) {
-      alert('Please enter a description or upload a sketch image.');
+    const prompt = this.aiPrompt().trim();
+
+    if (!sketchImg && !prompt) {
+      alert('Please either upload a sketch image or enter a description prompt.');
       return;
     }
 
     this.isGeneratingAi.set(true);
     try {
-      const apiKey = "";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-      
-      let userParts: any[] = [{ text: `Analyze this prompt/sketch and return ONLY a valid JSON object representing a label design: {"name": "...", "width": 40, "height": 60, "elements": [{"id": "el_1", "type": "text|barcode|qrcode|box", "x": 1, "y": 1, "width": 38, "height": 58, "content": "...", "style": {"fontSize": 12, "fontWeight": "bold", "textAlign": "center"}}]}. Prompt description: ${prompt}` }];
-      
+      let textLines: string[] = [];
+
       if (sketchImg) {
-        const base64Data = sketchImg.split(',')[1];
-        const mimeType = sketchImg.split(';')[0].replace('data:', '');
-        userParts.push({
-          inlineData: { mimeType, data: base64Data }
+        if (!(window as any).Tesseract) {
+          alert('Tesseract OCR script is still loading. Please try again in a moment.');
+          return;
+        }
+        const worker = await (window as any).Tesseract.createWorker('eng', 1, {
+          logger: (m: any) => console.log(m)
+        });
+        const ret = await worker.recognize(sketchImg);
+        await worker.terminate();
+        textLines = ret.data.text.split('\n').filter((l: string) => l.trim().length > 0);
+      } else {
+        textLines = prompt.split('\n').filter((l: string) => l.trim().length > 0);
+      }
+
+      let newElements: any[] = [
+        { id: "el_box1", type: "box", x: 1, y: 1, width: 38, height: 58, style: { borderWidth: 0.5, borderStyle: 'solid', borderColor: '#000000', borderRadius: 2, borderTopLeftRadius: 2, borderTopRightRadius: 2, borderBottomRightRadius: 2, borderBottomLeftRadius: 2, backgroundColor: 'transparent', borderTopWidth: 0.5, borderRightWidth: 0.5, borderBottomWidth: 0.5, borderLeftWidth: 0.5, rotation: 0 } }
+      ];
+
+      let startY = 4;
+      textLines.forEach((line: string, idx: number) => {
+        const cleaned = line.trim();
+        const isHeading = idx === 0;
+        newElements.push({
+          id: `el_ai_${idx}`,
+          type: 'text',
+          x: 4,
+          y: startY,
+          width: 32,
+          height: isHeading ? 8 : 6,
+          content: cleaned,
+          style: {
+            fontSize: isHeading ? 12 : 9,
+            fontWeight: isHeading ? 'bold' : 'normal',
+            textAlign: 'center',
+            fontFamily: 'Arial',
+            rotation: 0
+          }
+        });
+        startY += (isHeading ? 10 : 7);
+      });
+
+      if (startY + 15 < 58) {
+        newElements.push({
+          id: `el_ai_barcode`,
+          type: 'barcode',
+          x: 4,
+          y: startY + 2,
+          width: 32,
+          height: 12,
+          content: '{{barcode}}',
+          style: { barcodeType: 'CODE128', displayValue: true, fontSize: 9, rotation: 0 }
         });
       }
 
-      const payload = {
-        contents: [{ role: 'user', parts: userParts }],
-        generationConfig: { responseMimeType: "application/json" }
-      };
+      this.template.update(t => ({
+        ...t,
+        name: textLines[0] || 'AI Generated Label',
+        elements: newElements
+      }));
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const result = await response.json();
-      const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        const parsed = JSON.parse(text);
-        if (parsed.elements && Array.isArray(parsed.elements)) {
-          this.template.update(t => ({
-            ...t,
-            name: parsed.name || 'AI Custom Label',
-            width: parsed.width || t.width,
-            height: parsed.height || t.height,
-            elements: parsed.elements
-          }));
-          this.selectedIds.set([]);
-          this.aiPrompt.set('');
-          this.sketchImageBase64.set('');
-          this.sketchFileName.set('');
-          alert('AI Label generated successfully!');
-        }
-      }
+      this.selectedIds.set([]);
+      this.sketchImageBase64.set('');
+      this.sketchFileName.set('');
+      this.aiPrompt.set('');
+      alert('Successfully generated label using AI!');
     } catch (e) {
-      alert('Failed to generate AI label. Please try again.');
+      alert('AI generation failed. Please try again with a clearer image or prompt.');
     } finally {
       this.isGeneratingAi.set(false);
     }

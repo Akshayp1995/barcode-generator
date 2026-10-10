@@ -112,17 +112,21 @@
 
             <ng-container *ngIf="leftTab() === 'ai'">
               <div class="d-flex flex-column">
-                <label class="text-muted small font-weight-bold text-uppercase">AI Sketch to Label</label>
-                <p class="text-secondary small mb-2">Describe what kind of label layout you want or upload a hand-sketched image!</p>
-                <textarea class="form-control small mb-2" rows="3" placeholder="e.g. A luxury jewelry price tag with barcode, MRP, and store name..." [(ngModel)]="aiPrompt"></textarea>
+                <label class="text-muted small font-weight-bold text-uppercase">AI Sketch & Prompt Generator</label>
+                <p class="text-secondary small mb-2">Upload a hand-sketched image or type a prompt to generate a label layout using AI OCR!</p>
                 
                 <div class="custom-file mb-3">
                   <input type="file" class="custom-file-input" id="sketchFile" accept="image/*" (change)="onSketchImageUpload($event)">
                   <label class="custom-file-label small text-truncate" for="sketchFile">{{ sketchFileName() || 'Upload Sketch Image...' }}</label>
                 </div>
 
+                <div class="form-group mb-3">
+                   <label class="text-muted small">Or Describe Label</label>
+                   <textarea class="form-control form-control-sm" rows="3" [(ngModel)]="aiPrompt" placeholder="e.g. Modern apparel price tag with brand, price, and barcode..."></textarea>
+                </div>
+
                 <button class="btn btn-primary btn-sm font-weight-bold py-2" (click)="generateAiLabel()" [disabled]="isGeneratingAi()">
-                  <i class="fas fa-magic mr-1"></i> {{ isGeneratingAi() ? 'Analyzing & Generating...' : 'Generate with AI' }}
+                  <i class="fas fa-magic mr-1"></i> {{ isGeneratingAi() ? 'Processing AI...' : 'Generate Label' }}
                 </button>
               </div>
             </ng-container>
@@ -161,7 +165,7 @@
 
                 <div class="mt-2 pt-3 border-top">
                   <label class="text-muted small font-weight-bold text-uppercase mb-1">Field Mapping</label>
-                  <small class="d-block text-secondary mb-3" style="font-size: 10px; line-height: 1.2;">Map your label variables <code>{{'{{var}}'}}</code> to data fields.</small>
+                  <small class="d-block text-secondary mb-3" style="font-size: 10px; line-height: 1.2;">Map your label variables to data fields.</small>
                   
                   <ng-container *ngFor="let varName of templateVariables()">
                     <div class="input-group input-group-sm mb-2">
@@ -594,5 +598,3 @@
           </div>
        </ng-container>
     </div>
-
-
